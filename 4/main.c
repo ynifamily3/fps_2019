@@ -20,6 +20,7 @@ int main(int argc, char *argv[])
 {
 	char *blockbuf;
     char sectorbuf[SECTOR_SIZE];
+	char outputbuf[SECTOR_SIZE];
 	int lsn, i;
 
     devicefp = fopen("flashmemory", "w+b");
@@ -49,8 +50,26 @@ int main(int argc, char *argv[])
 	//
 
 	strncpy(sectorbuf, "data1", SECTOR_SIZE);
+	ftl_write(0, sectorbuf);
+	ftl_read(0, outputbuf);
+	printf("%s\n", outputbuf);
+	strncpy(sectorbuf, "data2", SECTOR_SIZE);
+	ftl_write(0, sectorbuf);
+	ftl_read(0, outputbuf);
+	printf("%s\n", outputbuf);
+	strncpy(sectorbuf, "data3", SECTOR_SIZE);
 	ftl_write(1, sectorbuf);
+	ftl_read(1, outputbuf);
+	printf("%s\n", outputbuf);
+	strncpy(sectorbuf, "data4", SECTOR_SIZE);
+	ftl_write(1, sectorbuf);
+	ftl_read(1, outputbuf);
+	printf("%s\n", outputbuf);
 
+	strncpy(sectorbuf, "ㅗ", SECTOR_SIZE);
+	ftl_write(1, sectorbuf);
+	ftl_read(1, outputbuf);
+	printf("%s\n", outputbuf);
 
 	fclose(devicefp);
 

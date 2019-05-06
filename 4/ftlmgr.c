@@ -23,16 +23,64 @@ int free_block_position;
 // 초기화 등의 작업을 수행한다. 따라서, 첫 번째 ftl_write() 또는 ftl_read()가 호출되기 전에
 // main()함수에서 반드시 먼저 호출이 되어야 한다.
 //
+
+// lsn에 해당하는 page를 찾아 pagebuf에 채운다. 버퍼가 있다면 역순으로 읽어 버퍼 내용을 꺼낸다.
+
+// spare의 값을 읽어준다. 기본적으로는 -1이다.
+int get_spare_data(const char *pagebuf)
+{
+	return *(int *)(pagebuf + SECTOR_SIZE);
+}
+
+int get_spare_data_by_ppn(int ppn)
+{
+	char pagebuf[PAGE_SIZE];
+	dd_read(ppn, pagebuf);
+	return get_spare_data(pagebuf);
+}
+
+int get_ppn_by_lsn(int lsn)
+{
+	char pagebuf[PAGE_SIZE];
+	int i, lbn, pbn, offset, ppn, spare_data;
+	lbn = lsn / NONBUF_PAGES_PER_BLOCK; // lsn 으로부터 lbn 계산하기
+	offset = lsn % NONBUF_PAGES_PER_BLOCK; // lsn 으로부터 offset 계산하기
+	if (mapping_table[lbn] == -1) mapping_table[lbn] = lbn; // mapping table이 설정되지 않았을 경우 설정
+	pbn = mapping_table[lbn];
+	ppn = pbn * PAGES_PER_BLOCK + offset;
+	
+	for (i = PAGES_PER_BLOCK - 1; i >= NONBUF_PAGES_PER_BLOCK; i--) {
+		dd_read(pbn * PAGES_PER_BLOCK + i, pagebuf);
+		spare_data = get_spare_data(pagebuf);
+		if (spare_data == lsn) return pbn * PAGES_PER_BLOCK + i;
+	}
+	return ppn;
+}
+
+// lsn에 해당하는 페이지를 찾아서 pagebuf에 채운다.
+void get_page(int lsn, char *pagebuf)
+{
+	int spare_data; // 버퍼 검사용
+	int i, lbn, pbn, offset, ppn;
+	lbn = lsn / NONBUF_PAGES_PER_BLOCK; // lsn 으로부터 lbn 계산하기
+	offset = lsn % NONBUF_PAGES_PER_BLOCK; // lsn 으로부터 offset 계산하기
+	if (mapping_table[lbn] == -1) mapping_table[lbn] = lbn; // mapping table이 설정되지 않았을 경우 설정
+	pbn = mapping_table[lbn];
+	ppn = pbn * PAGES_PER_BLOCK + offset;
+
+	// buffer영역을 역순으로 돌면서 계산한다.
+	for (i = PAGES_PER_BLOCK - 1; i >= NONBUF_PAGES_PER_BLOCK; i--) {
+		dd_read(pbn * PAGES_PER_BLOCK + i, pagebuf);
+		spare_data = get_spare_data(pagebuf);
+		if (spare_data == lsn) return;
+	}
+
+	// buffer 에서 찾지 못한 것은 해당 ppn에서 찾아 본다.
+	dd_read(ppn, pagebuf);
+}
+
 void ftl_open()
 {
-	//
-	// address mapping table 생성 및 초기화 등을 진행
-    // mapping table에서 lbn과 pbn의 수는 blkmap.h에 정의되어 있는 DATABLKS_PER_DEVICE
-    // 수와 같아야 하겠지요? 나머지 free block 하나는 overwrite 발생 시에 사용하면 됩니다.
-	// pbn 초기화의 경우, 첫 번째 write가 발생하기 전을 가정하므로 예를 들면, -1로 설정을
-    // 하고, 그 이후 필요할 때마다 block을 하나씩 할당을 해 주면 됩니다. 어떤 순서대로 할당하는지는
-    // 각자 알아서 판단하면 되는데, free block들을 어떻게 유지 관리할 지는 스스로 생각해 보기
-    // 바랍니다.
 	int i;
 	for (i = 0; i < DATABLKS_PER_DEVICE; i++)
 	{
@@ -44,174 +92,71 @@ void ftl_open()
 	return;
 }
 
-//
-// file system이 ftl_write()를 호출하면 FTL은 flash memory에서 주어진 lsn과 관련있는
-// 최신의 데이터(512B)를 읽어서 sectorbuf가 가리키는 곳에 저장한다.
-// 이 함수를 호출하기 전에 이미 sectorbuf가 가리키는 곳에 512B의 메모리가 할당되어 있어야 한다.
-// 즉, 이 함수에서 메모리를 할당받으면 안된다.
-//
 void ftl_read(int lsn, char *sectorbuf)
 {
-	// 처음에는 버퍼에서 거꾸로 읽음 (최신 데이터 찾기)
-	// 거기에 없으면 원래 offset에서 읽음
-	char pagebuf[PAGE_SIZE]; // 섹터 사이즈 + 스페어 사이즈까지 있음. 플래시 메모리에서 가져온 것.
-	int sparebuf; // 버퍼 검사용
-	int i, lbn, pbn, offset, ppn; // lsn가지고 계산하는 것들.
-	lbn = lsn / NONBUF_PAGES_PER_BLOCK;
-	offset = lsn % NONBUF_PAGES_PER_BLOCK;
-	pbn = mapping_table[lbn] != -1 ? mapping_table[lbn] : lbn;
-	ppn = pbn * PAGES_PER_BLOCK + offset;
-
-	// 여기서 버퍼를 역순으로 읽어 ppn을 갱신한다. (spare 검사)
-	/*
-	non-buf 0
-	non-buf 1
-	non-buf 2
-	buf 3
-	*/
-	for (i = PAGES_PER_BLOCK - 1; i >= NONBUF_PAGES_PER_BLOCK; i--)
-	{
-		// spare를 검사한다. spare에서 (int형 크기)바이트만 사용한다
-		if (dd_read(pbn * PAGES_PER_BLOCK + i, pagebuf) < 0) // 버퍼를 검사한다.
-		{
-			fprintf(stderr, "error dd_read for buffer : %d\n", i);
-			exit(1);
-		}
-
-		memcpy(sparebuf, pagebuf + SECTOR_SIZE, sizeof(int)); // 버퍼에서 spare만 빼온다.
-
-		if (sparebuf == lsn)
-		{
-			memset(sectorbuf, 0x00, SECTOR_SIZE); // 리턴될 섹터 버퍼 초기화
-			memcpy(sectorbuf, pagebuf, SECTOR_SIZE); // 데이터를 전달해줌
-			break;
-		}
-	}
-
-	if (dd_read(ppn, pagebuf) < 0)
-	{
-		fprintf(stderr, "error dd_read for lsn : %d\n", lsn);
-		exit(1);
-	}
-
-	memset(sectorbuf, 0x00, SECTOR_SIZE); // 리턴될 섹터 버퍼 초기화
+	char pagebuf[PAGE_SIZE];
+	get_page(lsn, pagebuf);
 	memcpy(sectorbuf, pagebuf, SECTOR_SIZE);
-
-
-	return;
 }
 
-//
-// file system이 ftl_write()를 호출하면 FTL은 flash memory에 sectorbuf가 가리키는 512B
-// 데이터를 저장한다. 당연히 flash memory의 어떤 주소에 저장할 것인지는 
-// buffer-based block mapping 기법을 따라야한다.
-//
 void ftl_write(int lsn, char *sectorbuf)
 {
-	char pagebuf[PAGE_SIZE];
 	int i;
-	int sparebuf; // 버퍼 검사용
-	int lbn = lsn / PAGES_PER_BLOCK;
-	int offset = lsn % PAGES_PER_BLOCK;
-	int pbn = mapping_table[lbn]; // dest physical block...
-	int ppn = pbn * PAGES_PER_BLOCK + offset;
-	// 그 페이지의 내용을 estimate해 본다. (비어 있는지.)
-	if (dd_read(ppn, pagebuf) < 0) {
-		fprintf(stderr, "spare checking Error ppn : %d\n", ppn);
-		exit(1);
-	}
-	memcpy(sparebuf, pagebuf + SECTOR_SIZE, sizeof(int)); // 버퍼에서 spare만 빼온다.
-	// spare 영역의 값이 -1이면 이 섹터엔 데이터가 들어간 적이 없다.
-	if (sparebuf == -1) {
-		// sectorbuf에 있는 데이터를 pagebuf에 복사
-		memcpy(pagebuf, sectorbuf, SECTOR_SIZE);
-		// lsn으로 변경 (이미 쓰여졌다는 표시를 넣음)
-		sparebuf = lsn;
-		*((int *)(pagebuf+SECTOR_SIZE)) = sparebuf;
-		if (dd_write(ppn, pagebuf) < 0) {
-			fprintf(stderr, "dd_write error\n");
-			exit(1);
-		}
+	char pagebuf[PAGE_SIZE];
+	
+	// 데이터를 버퍼에 기록하기
+	memcpy(pagebuf, sectorbuf, SECTOR_SIZE); // data 기록
+	*(int *)(pagebuf + SECTOR_SIZE) = lsn; // spare 기록
+
+	// 해당 offset이 비어 있으면 그 쪽에 기록하기
+	if (get_spare_data_by_ppn(get_ppn_by_lsn(lsn)) == -1) {
+		dd_write(get_ppn_by_lsn(lsn), pagebuf); // flash memory에 기록
 		return;
 	}
-	else
-	{
-		// sparebuf에 다른 값이 있으면 비어있는 버퍼가 나올때까지 찾는다. (순차적으로)
-		for (i = NONBUF_PAGES_PER_BLOCK; i < PAGES_PER_BLOCK; i++)
-		{
-			// spare를 검사한다. spare에서 (int형 크기)바이트만 사용한다
-			if (dd_read(pbn * PAGES_PER_BLOCK + i, pagebuf) < 0) // 버퍼를 검사한다.
-			{
-				fprintf(stderr, "error dd_read for buffer : %d\n", i);
-				exit(1);
-			}
-			memcpy(sparebuf, pagebuf + SECTOR_SIZE, sizeof(int)); // 버퍼에서 spare만 빼온다.
-			if (sparebuf == -1)
-			{
-				// 데이터를 넣음.
-				memcpy(pagebuf, sectorbuf, SECTOR_SIZE);
-				// 스페어를 lsn으로 변경 (이미 쓰여졌다는 표시를 넣음)
-				sparebuf = lsn;
-				*((int *)(pagebuf+SECTOR_SIZE)) = sparebuf;
-				if (dd_write(pbn * PAGES_PER_BLOCK + i, pagebuf) < 0)
-				{
-					fprintf(stderr, "dd_write error\n");
-					exit(1);
-				}
-				return; // 버퍼에 썼으므로 함수를 끝냄
-			}
+
+	// 버퍼를 '순차적으로' 조사하여 spare가 -1인 곳을 찾아내 기록하기
+	for (i = NONBUF_PAGES_PER_BLOCK; i < PAGES_PER_BLOCK; i++) {
+		int spare_ppn = mapping_table[lsn / NONBUF_PAGES_PER_BLOCK] * PAGES_PER_BLOCK + i;
+		if (get_spare_data_by_ppn(spare_ppn) == -1) {
+			dd_write(spare_ppn, pagebuf); // flash memory에 기록
+			return;
 		}
-		// 여기에 제어가 걸린다는 것은 offset에 데이터가 이미 있고, 버퍼도 꽉 차서 새로운 free block에 써야 한다는 걸 의미한다.
-		// 1. 해당하는 free block의 offset 에 데이터를 쓴다.
-		// 2. 버퍼를 역순으로 읽어 해당하는 lsn찾고 거기에 우선적으로 복사한다. 이미 값이 들어가 있는 경우엔 pass
-		// free블록을 이주 (dd_erase)
-		
-		// 1. 
-		// sectorbuf에 있는 데이터를 pagebuf에 복사
-		memcpy(pagebuf, sectorbuf, SECTOR_SIZE);
-		// spare data를 lsn으로 기록
-		sparebuf = lsn;
-		*((int *)(pagebuf+SECTOR_SIZE)) = sparebuf;
-		dd_write(free_block_position * PAGES_PER_BLOCK + offset, pagebuf); // 쓰려는 데이터를 쓴다.
-
-		//2. 
-		for (i = PAGES_PER_BLOCK - 1; i >= NONBUF_PAGES_PER_BLOCK; i--)
-		{
-			// 기존 버퍼에 있는 spare를 읽고, 해당 위치에 데이터를 기록한다. 만약 이미 기록된 lsn이면 pass 한다
-			
-			// 버퍼에서 읽은 spare
-			if (dd_read(pbn * PAGES_PER_BLOCK + i, pagebuf) < 0)
-			{
-				fprintf(stderr, "error dd_read for buffer : %d\n", i);
-				exit(1);
-			}
-			memcpy(sparebuf, pagebuf + SECTOR_SIZE, sizeof(int)); // 버퍼에서 spare만 빼온다.
-
-			// 버퍼에서 읽은 spare기반으로 원래 위치를 찾아가서 데이터가 들어있는지 살펴본다.
-			int newoffset = sparebuf % PAGES_PER_BLOCK;
-			char pagebuf2[PAGE_SIZE];
-			if (dd_read(pbn * PAGES_PER_BLOCK + newoffset, pagebuf2) < 0)
-			{
-				fprintf(stderr, "error dd_read for buffer : %d\n", i);
-				exit(1);
-			}
-			// 기록을 시도하는 위치에서 읽은 spare (-1이면 씀)
-			int newspare;
-			memcpy(newspare, pagebuf + SECTOR_SIZE, sizeof(int)); // 버퍼에서 spare만 빼온다.
-			if (newspare == -1)
-			{
-				// 해당하는 내용을 버퍼에 있던 내용으로 씀
-				// ********************** 여기에서부터 내용을 추가해야 겠음 ********************************************//
-				dd_write(free_block_position * PAGES_PER_BLOCK + offset, pagebuf2); // 쓰려는 데이터를 쓴다. (이 코드가 맞나?)
-			}
-			else
-			{
-				// 아무 작업 할 필요 없음.
-			}
-
-
-		}
-
 	}
-	return;
+	// 버퍼에 남은 공간이 없다면, 새 프리 블록으로 이주하기
+	// i  ) 프리블럭 위치에 쓰려는 lsn에 있는 데이터를 우선 쓴다.
+	// ii ) 버퍼를 역순으로 읽어 해당 lsn이 있으면 그걸 기록한다., 그 다음에 기존 페이지를 씀
+	// iii) 프리 블럭 이주
+	int lbn = lsn / NONBUF_PAGES_PER_BLOCK;
+	if (mapping_table[lbn] == -1) mapping_table[lbn] = lbn; // mapping table이 설정되지 않았을 경우 설정
+	int pbn = mapping_table[lbn];
+	int spare_data, spare_offset;
+
+	int free_block_ppn = free_block_position * PAGES_PER_BLOCK + (lsn % NONBUF_PAGES_PER_BLOCK);
+	dd_write(free_block_ppn, pagebuf); // 해당 내용을 쓴다. 이미 썼으므로 나중에 pagebuf재활용에 문제 없다..
+
+	// buffer영역을 역순으로 돌면서 계산한다.
+	for (i = PAGES_PER_BLOCK - 1; i >= NONBUF_PAGES_PER_BLOCK; i--) {
+		dd_read(pbn * PAGES_PER_BLOCK + i, pagebuf);
+		spare_data = get_spare_data(pagebuf);
+		// spare data 의 나머지가 offset이다.. 
+		spare_offset = spare_data % NONBUF_PAGES_PER_BLOCK;
+
+		// freeblock 위치 + offset에 이미 데이터가 있는지 조사하여 없으면 ddwrite한다. 있으면 무시
+		if (get_spare_data_by_ppn(free_block_position * PAGES_PER_BLOCK + spare_offset) == -1) {
+			// ddwrite
+			dd_write(free_block_position * PAGES_PER_BLOCK + spare_offset, pagebuf);
+		}
+	}
+
+	// NON-buffer 까지 순서대로 돌면서 빈 부분을 복사해옴.
+	for (i = 0; i < NONBUF_PAGES_PER_BLOCK; i++) {
+		dd_read(pbn * PAGES_PER_BLOCK + i, pagebuf);
+		if (get_spare_data_by_ppn(free_block_position * PAGES_PER_BLOCK + i) == -1) { // free block 해당 위치가 비어 있으면
+			dd_write(free_block_position * PAGES_PER_BLOCK + i, pagebuf);
+		}
+	}
+	// dd-erase후 free block 이주
+	dd_erase(pbn);
+	mapping_table[lbn] = free_block_position;
+	free_block_position = pbn;
 }

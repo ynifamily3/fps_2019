@@ -1,0 +1,106 @@
+	char pagebuf[PAGE_SIZE];
+	int i;
+	int sparebuf; // 버퍼 검사용
+	int lbn = lsn / PAGES_PER_BLOCK;
+	int offset = lsn % PAGES_PER_BLOCK;
+	int pbn = mapping_table[lbn]; // dest physical block...
+	int ppn = pbn * PAGES_PER_BLOCK + offset;
+	// 그 페이지의 내용을 estimate해 본다. (비어 있는지.)
+	if (dd_read(ppn, pagebuf) < 0) {
+		fprintf(stderr, "spare checking Error ppn : %d\n", ppn);
+		exit(1);
+	}
+	memcpy(sparebuf, pagebuf + SECTOR_SIZE, sizeof(int)); // 버퍼에서 spare만 빼온다.
+	// spare 영역의 값이 -1이면 이 섹터엔 데이터가 들어간 적이 없다.
+	if (sparebuf == -1) {
+		// sectorbuf에 있는 데이터를 pagebuf에 복사
+		memcpy(pagebuf, sectorbuf, SECTOR_SIZE);
+		// lsn으로 변경 (이미 쓰여졌다는 표시를 넣음)
+		sparebuf = lsn;
+		*((int *)(pagebuf+SECTOR_SIZE)) = sparebuf;
+		if (dd_write(ppn, pagebuf) < 0) {
+			fprintf(stderr, "dd_write error\n");
+			exit(1);
+		}
+		return;
+	}
+	else
+	{
+		// sparebuf에 다른 값이 있으면 비어있는 버퍼가 나올때까지 찾는다. (순차적으로)
+		for (i = NONBUF_PAGES_PER_BLOCK; i < PAGES_PER_BLOCK; i++)
+		{
+			// spare를 검사한다. spare에서 (int형 크기)바이트만 사용한다
+			if (dd_read(pbn * PAGES_PER_BLOCK + i, pagebuf) < 0) // 버퍼를 검사한다.
+			{
+				fprintf(stderr, "error dd_read for buffer : %d\n", i);
+				exit(1);
+			}
+			memcpy(sparebuf, pagebuf + SECTOR_SIZE, sizeof(int)); // 버퍼에서 spare만 빼온다.
+			if (sparebuf == -1)
+			{
+				// 데이터를 넣음.
+				memcpy(pagebuf, sectorbuf, SECTOR_SIZE);
+				// 스페어를 lsn으로 변경 (이미 쓰여졌다는 표시를 넣음)
+				sparebuf = lsn;
+				*((int *)(pagebuf+SECTOR_SIZE)) = sparebuf;
+				if (dd_write(pbn * PAGES_PER_BLOCK + i, pagebuf) < 0)
+				{
+					fprintf(stderr, "dd_write error\n");
+					exit(1);
+				}
+				return; // 버퍼에 썼으므로 함수를 끝냄
+			}
+		}
+		// 여기에 제어가 걸린다는 것은 offset에 데이터가 이미 있고, 버퍼도 꽉 차서 새로운 free block에 써야 한다는 걸 의미한다.
+		// 1. 해당하는 free block의 offset 에 데이터를 쓴다.
+		// 2. 버퍼를 역순으로 읽어 해당하는 lsn찾고 거기에 우선적으로 복사한다. 이미 값이 들어가 있는 경우엔 pass
+		// free블록을 이주 (dd_erase)
+		
+		// 1. 
+		// sectorbuf에 있는 데이터를 pagebuf에 복사
+		memcpy(pagebuf, sectorbuf, SECTOR_SIZE);
+		// spare data를 lsn으로 기록
+		sparebuf = lsn;
+		*((int *)(pagebuf+SECTOR_SIZE)) = sparebuf;
+		dd_write(free_block_position * PAGES_PER_BLOCK + offset, pagebuf); // 쓰려는 데이터를 쓴다.
+
+		//2. 
+		for (i = PAGES_PER_BLOCK - 1; i >= NONBUF_PAGES_PER_BLOCK; i--)
+		{
+			// 기존 버퍼에 있는 spare를 읽고, 해당 위치에 데이터를 기록한다. 만약 이미 기록된 lsn이면 pass 한다
+			
+			// 버퍼에서 읽은 spare
+			if (dd_read(pbn * PAGES_PER_BLOCK + i, pagebuf) < 0)
+			{
+				fprintf(stderr, "error dd_read for buffer : %d\n", i);
+				exit(1);
+			}
+			memcpy(sparebuf, pagebuf + SECTOR_SIZE, sizeof(int)); // 버퍼에서 spare만 빼온다.
+
+			// 버퍼에서 읽은 spare기반으로 원래 위치를 찾아가서 데이터가 들어있는지 살펴본다.
+			int newoffset = sparebuf % PAGES_PER_BLOCK;
+			char pagebuf2[PAGE_SIZE];
+			if (dd_read(pbn * PAGES_PER_BLOCK + newoffset, pagebuf2) < 0)
+			{
+				fprintf(stderr, "error dd_read for buffer : %d\n", i);
+				exit(1);
+			}
+			// 기록을 시도하는 위치에서 읽은 spare (-1이면 씀)
+			int newspare;
+			memcpy(newspare, pagebuf + SECTOR_SIZE, sizeof(int)); // 버퍼에서 spare만 빼온다.
+			if (newspare == -1)
+			{
+				// 해당하는 내용을 버퍼에 있던 내용으로 씀
+				// ********************** 여기에서부터 내용을 추가해야 겠음 ********************************************//
+				dd_write(free_block_position * PAGES_PER_BLOCK + offset, pagebuf2); // 쓰려는 데이터를 쓴다. (이 코드가 맞나?)
+			}
+			else
+			{
+				// 아무 작업 할 필요 없음.
+			}
+
+
+		}
+
+	}
+	return;
