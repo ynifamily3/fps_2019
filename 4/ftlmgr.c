@@ -133,6 +133,7 @@ void ftl_write(int lsn, char *sectorbuf)
 
 	int free_block_ppn = free_block_position * PAGES_PER_BLOCK + (lsn % NONBUF_PAGES_PER_BLOCK);
 	dd_write(free_block_ppn, pagebuf); // 해당 내용을 쓴다. 이미 썼으므로 나중에 pagebuf재활용에 문제 없다..
+	printf("프리블록 ppn : %d\n", free_block_ppn);
 
 	// buffer영역을 역순으로 돌면서 계산한다.
 	for (i = PAGES_PER_BLOCK - 1; i >= NONBUF_PAGES_PER_BLOCK; i--) {
