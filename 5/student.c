@@ -179,10 +179,49 @@ int main(int argc, char *argv[])
 					fseek(fp, (long)data, SEEK_SET); // 기록할 위치로 가기
 					fwrite((const void *)recordbuf, data_len, 1, fp);
 					rewind(fp); // head로 가서
-					fwrite((const void *)next_deleted_offset, sizeof(short int), (size_t)1, fp); // head를 수정
+					fwrite((const void *)&next_deleted_offset, sizeof(short int), (size_t)1, fp); // head를 수정
 				} else {
 					// 첫번째 발견한 위치에 쓸 수 없다. 링크를 계속 따라간다.
-					
+					short int prev = data;
+					short int curr = next_deleted_offset;
+					short int next;
+					while (1) {
+						// 두 정보를 읽어 들인다.
+						fseek(fp, (long)curr + 1, SEEK_SET);
+						// 다음 삭제 오프셋 읽어오기
+						fread((void *)&next, sizeof(short int), (size_t)1, fp);
+						// avail size 읽기
+						fread((void *)&avail_size, sizeof(short int), (size_t)1, fp);
+						if (avail_size >= data_len) {
+							fseek(fp, (long)curr, SEEK_SET);
+							fwrite((const void *)recordbuf, data_len, 1, fp);
+							fseek(fp, (long)prev, SEEK_SET);
+							fwrite((const void *)&next, sizeof(short int), (size_t)1, fp);
+							fclose(fp);
+							break;
+						} else {
+							prev = curr;
+							curr = next;
+							if (next == -1) {
+								idx_fp = fopen(INDEX_FILE_NAME, "rb+");
+								short int tmp;
+								fread((void *)&tmp, sizeof(short int), (size_t)1, idx_fp);
+								rewind(idx_fp);
+								++tmp;
+								fwrite((const void *)&tmp, sizeof(short int), (size_t)1, idx_fp);
+								fseek(idx_fp, 0, SEEK_END);
+								fseek(fp, 0, SEEK_END);
+								tmp = ftell(fp);
+								fwrite((const void *)&tmp, sizeof(short int), (size_t)1, idx_fp);
+								fwrite((const void *)recordbuf, data_len, 1, fp);
+								fclose(idx_fp);
+								fclose(fp);
+								break; // append명령
+							}
+						}
+					}
+
+
 				}
 			}
 		}
