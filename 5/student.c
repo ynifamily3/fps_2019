@@ -99,7 +99,7 @@ int search(FILE *fp, const char *keyval);
 //
 void delete(FILE *fp, const char *keyval);
 
-void printRecord(const Student *s, int n);
+void printRecord(const Student *s);
 
 
 int main(int argc, char *argv[])
@@ -113,23 +113,24 @@ int main(int argc, char *argv[])
 		fprintf(stderr, usage, argv[0], argv[0], argv[0]);
 		return 1;
 	}
-	strncpy(student_data.id, (const char *)argv[2], (size_t)(sizeof(student_data.id) - 1));
-	strncpy(student_data.name, (const char *)argv[3], (size_t)(sizeof(student_data.name) - 1));
-	strncpy(student_data.dept, (const char *)argv[4], (size_t)(sizeof(student_data.dept) - 1));
-	strncpy(student_data.year, (const char *)argv[5], (size_t)(sizeof(student_data.year) - 1));
-	strncpy(student_data.addr, (const char *)argv[6], (size_t)(sizeof(student_data.addr) - 1));
-	strncpy(student_data.phone, (const char *)argv[7], (size_t)(sizeof(student_data.phone) - 1));
-	strncpy(student_data.email, (const char *)argv[8], (size_t)(sizeof(student_data.email) - 1));
 
 	// 저장	“20101234” “Gildong Hong” “Computer Science” “3” “Dongjak-Gu,Seoul” “010-828-0567” “gdhong@ssu.ac.kr”
 	if (argc == 9 && argv[1][0] == '-' && argv[1][1] == 'a' && argv[1][2] =='\0') {
+		strncpy(student_data.id, (const char *)argv[2], (size_t)(sizeof(student_data.id) - 1));
+		strncpy(student_data.name, (const char *)argv[3], (size_t)(sizeof(student_data.name) - 1));
+		strncpy(student_data.dept, (const char *)argv[4], (size_t)(sizeof(student_data.dept) - 1));
+		strncpy(student_data.year, (const char *)argv[5], (size_t)(sizeof(student_data.year) - 1));
+		strncpy(student_data.addr, (const char *)argv[6], (size_t)(sizeof(student_data.addr) - 1));
+		strncpy(student_data.phone, (const char *)argv[7], (size_t)(sizeof(student_data.phone) - 1));
+		strncpy(student_data.email, (const char *)argv[8], (size_t)(sizeof(student_data.email) - 1));
 		// 두 파일 중 하나라도 없다면 둘 다 새로 만듦
 		if (access(RECORD_FILE_NAME, R_OK) || access(INDEX_FILE_NAME, R_OK)) {
 			// printf("새로 만드는 상황\n");
 			fp = fopen(INDEX_FILE_NAME, "wb+");
 			short int data = 1; // 레코드 수 기록 (2b)
 			fwrite((const void *)&data, sizeof(short int), (size_t)1, fp);
-			data = 0; // 레코드 인덱스 기록 (최초 0)
+			data = sizeof(short int); // 레코드 인덱스 기록 (최초 2)
+			printf("새로 만듦 %d \n", data);
 			fwrite((const void *)&data, sizeof(short int), (size_t)1, fp);
 			idx_fp = fopen(RECORD_FILE_NAME, "wb+");
 			pack(recordbuf, &student_data);
@@ -220,8 +221,6 @@ int main(int argc, char *argv[])
 							}
 						}
 					}
-
-
 				}
 			}
 		}
@@ -232,7 +231,44 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 	else if (argc == 3 && argv[1][0] == '-' && argv[1][1] == 's' && argv[1][2] =='\0') {
+		char id[11];
+		short int records;
+		int i;
+		short int readPos, nextPos;
+		short int recordSize;
+		strncpy(id, argv[2], 10);
+		id[10] = '\0';
+		// idx에 나온 인덱스대로 탐색하여 살펴봄.
+		fp = fopen(RECORD_FILE_NAME, "rb");
+		idx_fp = fopen(INDEX_FILE_NAME, "rb");
+		if (!idx_fp || !idx_fp) {
+			fprintf(stderr, usage, argv[0], argv[0], argv[0]);
+			return 1;
+		}
+		fread((void *)&records, sizeof(short int), (size_t)1, idx_fp);
 
+		for (i = 0; i < records; i++) {
+			fread((void *)&readPos, sizeof(short int), (size_t)1, idx_fp);
+			if (i + 1 != records) {
+				fread((void *)&nextPos, sizeof(short int), (size_t)1, idx_fp);
+				fseek(idx_fp, -sizeof(short int), SEEK_CUR);
+				recordSize = nextPos - readPos;
+			} else {
+				fseek(fp, 0, SEEK_END);
+				recordSize = ftell(fp) - readPos;
+			}
+			fseek(fp, readPos, SEEK_SET);
+			fread((void *)recordbuf, recordSize, 1, fp);
+			unpack(recordbuf, &student_data);
+			printf("test : %s\n", recordbuf);
+			if ( strcmp(student_data.id, id) == 0 ) {
+				printRecord(&student_data);
+				break;
+			}
+		}
+
+		fclose(fp);
+		fclose(idx_fp);
 		return 0;
 	}
 	else {
@@ -250,12 +286,7 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
-void printRecord(const Student *s, int n)
+void printRecord(const Student *s)
 {
-	int i;
-
-	for(i=0; i<n; i++)
-	{
-		printf("%s|%s|%s|%s|%s|%s|%s\n", s[i].id, s[i].name, s[i].dept, s[i].year, s[i].addr, s[i].phone, s[i].email);
-	}
+	printf("%s|%s|%s|%s|%s|%s|%s\n", s->id, s->name, s->dept, s->year, s->addr, s->phone, s->email);
 }
