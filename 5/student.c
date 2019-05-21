@@ -77,7 +77,14 @@ void unpack(const char *recordbuf, Student *s)
 //
 void readRecord(FILE *fp, char *recordbuf, int rn)
 {
-	// rn은 byte offset인가?
+	// rn은 byte offset
+	// idx_fp 로부터 rn으로부터의 위치를 읽어서, 그 바이트 오프셋으로부터 길이를 구해 
+	short int records = get_idx_number_of_record();
+	short int length; // diff with 
+	if (rn >= records) {
+		fprintf(stderr, "Invalid rn : %d\trecords : %hd\n", rn, length);
+		return;
+	}
 }
 
 //
@@ -142,6 +149,14 @@ void set_header_idx(FILE *fp, short int header_val)
 	fwrite((const void *)&header_val, sizeof(short int), (size_t)1, fp);	
 }
 
+short int get_header_idx(FILE *fp)
+{
+	short int ret;
+	rewind(fp);
+	fread((void *)&ret, sizeof(short int), (size_t)1, fp);
+	return ret;
+}
+
 void set_student_struct_by_args(Student *student_data, const char **argv)
 {
 	strncpy(student_data->id, (const char *)argv[2], (size_t)(sizeof(student_data->id) - 1));
@@ -180,6 +195,10 @@ int main(int argc, char *argv[])
 	if (argc == 9 && strcmp("-a", argv[1]) == 0) {
 		// arg로부터 얻어온다.
 		set_student_struct_by_args(&student_data, argv);
+		// 삭제 레코드가 존재하지 않는다면 append 한다.
+		if (get_header_idx(fp) == -1) {
+			// just append this
+		}
 	}
 	else if (argc == 3 && strcmp("-s", argv[1]) == 0) {
 

@@ -3,6 +3,9 @@
 #include <unistd.h>
 #include "student.h"
 
+short int get_idx_number_of_record(void);
+void set_idx_number_of_record(short int val);
+
 //
 // 학생 레코드 파일에 레코드를 저장하기 전에 구조체 Student에 저장되어 있는 데이터를 레코드 형태로 만든다.
 // 
