@@ -123,6 +123,7 @@ void add(FILE *idx_fp, FILE *fp, const STUDENT *s)
 			// just append this
 			// idx에 새로운 값을 append한다.
 			// 허상 byte offset 2가 빠짐
+			fseek(fp, 0, SEEK_END);
 			append_idx_new_byte_offset(idx_fp, ftell(fp) - sizeof(short int));
 			fwrite((const void *)record_buf, strlen(record_buf), (size_t)1, fp);
 		} else {
@@ -133,10 +134,10 @@ void add(FILE *idx_fp, FILE *fp, const STUDENT *s)
 				// 헤더 길이(2) + del mark길이(1) 만큼 이동하여 다음에 찾을 노드를 탐색
 				fseek(fp, curr + sizeof(short int) + sizeof(char), SEEK_SET);
 				fread((void *)&curr, sizeof(short int), 1, fp); // 다음에 찾을 노드
-				fread((void *)&length, sizeof(short int), 1, fp); // length
+				fread((void *)&length, sizeof(short int), 1, fp); // 저장된 length
 			} while (length > record_size && curr != -1);
 			// 삭제된 레코드 모두 자리가 충분하지 않은 경우 그냥 append
-			if (curr == -1 && length > record_size) {
+			if (length < record_size) {
 				append_idx_new_byte_offset(idx_fp, ftell(fp) - sizeof(short int));
 				fwrite((const void *)record_buf, strlen(record_buf), (size_t)1, fp);
 			} else {
@@ -198,10 +199,10 @@ short int get_length_by_rn(FILE *idx_fp, FILE *fp, int rn)
 	// 파일의 endpoint라면 file length 가 필요하다. 아니라면 다음 레코드의 위치와의 차이이다.
 	short int records = get_idx_number_of_record(idx_fp);
 	short int length;
-	short int byte_offset = get_byte_offset_by_rn(idx_fp, rn);
+	short int byte_offset = get_byte_offset_by_rn(idx_fp, rn); // 실제 오프셋이 2라면 0이 리턴됨
 	if (rn == records - 1) {
 		fseek(fp, 0, SEEK_END);
-		length = (short int)ftell(fp) - byte_offset;
+		length = (short int)ftell(fp) - byte_offset - sizeof(short int); // 허상 offset을 빼 줬으므로 보정한다.
 	} else {
 		fseek(idx_fp, sizeof(short int) * (rn + 2), SEEK_SET);
 		fread((void *)&length, sizeof(short int), (size_t)1, idx_fp);
@@ -221,6 +222,7 @@ void delete(FILE *idx_fp, FILE *fp, const char *keyval)
 	// 해당 레코드가 있나 검사해 보기
 	if ((rn = search(idx_fp, fp, keyval)) < 0)
 		return;
+	
 	byte_offset = get_byte_offset_by_rn(idx_fp, rn);
 	length = get_length_by_rn(idx_fp, fp, rn);
 	// 삭제 처리하기 (허상 오프셋을 고려한다.)
