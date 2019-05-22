@@ -14,6 +14,6 @@ typedef struct _Student
 	char dept[20];		//학과
     char phone[16];		//전화번호
 	char email[26];		//이메일 주소
-} Student;
+} STUDENT;
 
 #endif
