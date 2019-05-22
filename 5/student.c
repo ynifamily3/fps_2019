@@ -125,7 +125,7 @@ void add(FILE *idx_fp, FILE *fp, const STUDENT *s)
 			fseek(fp, 0, SEEK_END);
 			append_idx_new_byte_offset(idx_fp, ftell(fp) - sizeof(short int));
 			fwrite((const void *)record_buf, strlen(record_buf), (size_t)1, fp);
-			printf("**프리비어스 헤더데이터가 없음**\n");
+			// printf("**프리비어스 헤더데이터가 없음**\n");
 		} else {
 			short int curr = previous_header_data;
 			short int length;
@@ -140,21 +140,21 @@ void add(FILE *idx_fp, FILE *fp, const STUDENT *s)
 			
 			// 삭제된 레코드 모두 자리가 충분하지 않은 경우 그냥 append
 			if (length < record_size) {
-				printf("**자리가 충분하지 않음** length : %hd, record_size : %hd\n", length, record_size);
+				// printf("**자리가 충분하지 않음** length : %hd, record_size : %hd\n", length, record_size);
 				append_idx_new_byte_offset(idx_fp, ftell(fp) - sizeof(short int));
 				fwrite((const void *)record_buf, strlen(record_buf), (size_t)1, fp);
 			} else {
-				printf("**자리가 충분함 ** length : %hd, record_size : %hd\n", length, record_size);
+				// printf("**자리가 충분함 ** length : %hd, record_size : %hd\n", length, record_size);
 				// 들어갈 자리가 있으므로 해당 자리에 update
 				// 우선, 헤더를 업데이트 해야 되는데 현재 위치를 업데이트한다.
 				// *[off][len]
-				printf("****pos : %hd\n", ftell(fp));
-				printf("****curr : %hd\n", curr);
+				// printf("****pos : %hd\n", ftell(fp));
+				// printf("****curr : %hd\n", curr);
 				fseek(fp, - sizeof(short int) - sizeof(short int), SEEK_CUR);
 				short int tmpPos = ftell(fp) - sizeof(char); // *마크도 빼준다.
-				printf("데이터 저장 위치 (실상) : %hd\n", tmpPos);
+				// printf("데이터 저장 위치 (실상) : %hd\n", tmpPos);
 				fread((void *)&curr, sizeof(short int), 1, fp); // 헤더에 쓸 값 (본인 포지션임)
-				printf(">>>> 헤더에 쓸 값 : %hd\n", curr);
+				// printf(">>>> 헤더에 쓸 값 : %hd\n", curr);
 				set_header_idx(fp, curr);
 				// 그리고 해당 위치에 쓴다.
 				fseek(fp, tmpPos, SEEK_SET);
