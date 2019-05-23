@@ -124,43 +124,60 @@ void add(FILE *idx_fp, FILE *fp, const STUDENT *s)
 			// 허상 byte offset 2가 빠짐
 			fseek(fp, 0, SEEK_END);
 			append_idx_new_byte_offset(idx_fp, ftell(fp) - sizeof(short int));
-			fwrite((const void *)record_buf, strlen(record_buf), (size_t)1, fp);
+			fwrite((const void *)record_buf, record_size, (size_t)1, fp);
 			// printf("**프리비어스 헤더데이터가 없음**\n");
 		} else {
-			short int curr = previous_header_data;
-			short int length;
-			// 헤더가 가리키는 곳을 찾아가서 용량이 충분한지 묻는다.
-			// 용량이 충분하면 바로 while 문을 끝낸다. 이걸 안하고 끝까지 버텼음 ㅡㅡ
-			do {
-				// 헤더 길이(2) + del mark길이(1) 만큼 이동하여 다음에 찾을 노드를 탐색
-				fseek(fp, curr + sizeof(short int) + sizeof(char), SEEK_SET);
-				fread((void *)&curr, sizeof(short int), 1, fp); // 다음에 찾을 노드
-				fread((void *)&length, sizeof(short int), 1, fp); // 저장된 length
-			} while (length < record_size && curr != -1); // 반복 조건 : 다음 노드가 있고 && 현재 위치의 용량이 충분하지 않을때
-			
-			// 삭제된 레코드 모두 자리가 충분하지 않은 경우 그냥 append
-			if (length < record_size) {
-				// printf("**자리가 충분하지 않음 -> append ** length : %hd, record_size : %hd\n", length, record_size);
+			// 삭제된 공간들을 linked list 로 찾으면서 적절한 곳에 넣기.
+			// 처음에 (헤더와 직접 관련되었을 때)는 그냥 if 로 적절한 공간인지 판별한다.
+			short int next_deleted;
+			short int this_length;
+			// 헤더가 가리키는 포지션 + 실제 포지션 2 + delmark 1
+			fseek(fp, previous_header_data + sizeof(short int) + sizeof(char), SEEK_SET);
+			fread(&next_deleted, sizeof(short int), (size_t)1, fp);
+			fread(&this_length, sizeof(short int), (size_t)1, fp);
+			if (this_length >= record_size) {
+				// 이쪽을 재활용
+				fseek(fp, -sizeof(short int)-sizeof(short int)-sizeof(char), SEEK_CUR);
+				fwrite((const void *)record_buf, record_size, (size_t)1, fp);
+				// 헤더는 next_deleted가 된다.
+				set_header_idx(fp, next_deleted);
+				return;
+			} else if (next_deleted == -1) {
+				// 그냥 data를 append한다.
 				fseek(fp, 0, SEEK_END);
 				append_idx_new_byte_offset(idx_fp, ftell(fp) - sizeof(short int));
-				fwrite((const void *)record_buf, strlen(record_buf), (size_t)1, fp);
-			} else {
-				// printf("**자리가 충분함 ** length : %hd, record_size : %hd\n", length, record_size);
-				// 들어갈 자리가 있으므로 해당 자리에 update
-				// 우선, 헤더를 업데이트 해야 되는데 현재 위치를 업데이트한다.
-				// *[off][len]
-				// printf("****pos : %hd\n", ftell(fp));
-				// printf("****curr : %hd\n", curr);
-				fseek(fp, - sizeof(short int) - sizeof(short int), SEEK_CUR);
-				short int tmpPos = ftell(fp) - sizeof(char); // *마크도 빼준다.
-				// printf("데이터 저장 위치 (실상) : %hd\n", tmpPos);
-				fread((void *)&curr, sizeof(short int), 1, fp); // 헤더에 쓸 값 (본인 포지션임)
-				// printf(">>>> 헤더에 쓸 값 : %hd\n", curr);
-				set_header_idx(fp, curr);
-				// 그리고 해당 위치에 쓴다.
-				fseek(fp, tmpPos, SEEK_SET);
-				fwrite((const void *)record_buf, strlen(record_buf), (size_t)1, fp);
+				fwrite((const void *)record_buf, record_size, (size_t)1, fp);
+				return;
 			}
+
+
+			// 공간이 충분하지 않으니 다음 루틴을 실행한다.
+			short int prev_pos = previous_header_data; // 허상 이전 오프셋
+			short int curr_pos = next_deleted; // 허상 현재 오프셋 (301)
+			do {
+				// curr_pos 가 가리키는 곳으로 찾아간다. 거기에 공간이 충분한지 estimate 한다.
+				short int tmp = curr_pos;
+				fseek(fp, curr_pos + sizeof(short int) + sizeof(char), SEEK_SET);
+				fread(&curr_pos, sizeof(short int), (size_t)1, fp); // 다음 읽을 곳..
+				fread(&this_length, sizeof(short int), (size_t)1, fp);
+				if (this_length >= record_size) {
+					// 지금 당장 재활용한다.
+					fseek(fp, -sizeof(short int)-sizeof(short int)-sizeof(char), SEEK_CUR);
+					fwrite((const void *)record_buf, record_size, (size_t)1, fp);
+					// 이전 포지션에 다음 포인터를 가리키도록 한다.
+					fseek(fp, prev_pos + sizeof(short int) + sizeof(char), SEEK_SET);
+					fwrite(&curr_pos, sizeof(short int), 1, fp);
+					return; // 이겼다!
+				} else if (curr_pos == -1) {
+					// 길이가 부족한데 이곳이 삭제된 곳의 endpoint일 경우
+					// 그냥 data를 append한다.
+					fseek(fp, 0, SEEK_END);
+					append_idx_new_byte_offset(idx_fp, ftell(fp) - sizeof(short int));
+					fwrite((const void *)record_buf, record_size, (size_t)1, fp);
+					return; // 이겼다!
+				}
+				prev_pos = tmp;
+			} while (1);
 		}
 }
 
