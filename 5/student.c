@@ -140,11 +140,12 @@ void add(FILE *idx_fp, FILE *fp, const STUDENT *s)
 			
 			// 삭제된 레코드 모두 자리가 충분하지 않은 경우 그냥 append
 			if (length < record_size) {
-				// printf("**자리가 충분하지 않음** length : %hd, record_size : %hd\n", length, record_size);
+				printf("**자리가 충분하지 않음 -> append ** length : %hd, record_size : %hd\n", length, record_size);
+				fseek(fp, 0, SEEK_END);
 				append_idx_new_byte_offset(idx_fp, ftell(fp) - sizeof(short int));
 				fwrite((const void *)record_buf, strlen(record_buf), (size_t)1, fp);
 			} else {
-				// printf("**자리가 충분함 ** length : %hd, record_size : %hd\n", length, record_size);
+				 printf("**자리가 충분함 ** length : %hd, record_size : %hd\n", length, record_size);
 				// 들어갈 자리가 있으므로 해당 자리에 update
 				// 우선, 헤더를 업데이트 해야 되는데 현재 위치를 업데이트한다.
 				// *[off][len]
