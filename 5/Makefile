@@ -131,12 +131,18 @@ test :
 	#@-hd student.idx
 	#@-hd student.dat
 	@echo "test #20 - 임의의 순서대로 삭제"
-	@-$(TARGET) -d "20190002"
-	@-$(TARGET) -d "20190004"
-	@-$(TARGET) -d "20190006"
-	@-$(TARGET) -d "20190005"
+#	@-$(TARGET) -d "20190002"
+#	@-$(TARGET) -d "20190004"
+#	@-$(TARGET) -d "20190006"
+#	@-$(TARGET) -d "20190005"
+#	@-$(TARGET) -d "20190003"
+#	@-$(TARGET) -d "20190001"
 	@-$(TARGET) -d "20190001"
+	@-$(TARGET) -d "20190002"
 	@-$(TARGET) -d "20190003"
+	@-$(TARGET) -d "20190004"
+	@-$(TARGET) -d "20190005"
+	@-$(TARGET) -d "20190006"
 	@echo "test #21 - 남은 데이터 없음"
 	@-$(TARGET) -s "20190002"
 	@-$(TARGET) -s "20190004"
@@ -144,8 +150,8 @@ test :
 	@-$(TARGET) -s "20190005"
 	@-$(TARGET) -s "20190001"
 	@-$(TARGET) -s "20190003"
-	#@-hd student.idx
-	#@-hd student.dat
+	@-hd student.idx
+	@-hd student.dat
 	@echo "test #22 - 삭제 공간 재활용성 테스트 (적절한 데이터 기록)"
 	@echo "하나"
 	@-$(TARGET) -a "2014" "paradise" "law" "1" "aaddr " "010-a-b" "a@"
@@ -159,8 +165,8 @@ test :
 	@-$(TARGET) -a "2018" "diamond" "sound" "5" "eaddr" "010-i-j" "e@"
 	@echo "여섯"
 	@-$(TARGET) -a "2019" "elephant" "hyunghak" "6" "faddr" "010-k-l" "f@"
-	#@-hd student.idx
-	#@-hd student.dat
+	@-hd student.idx
+	@-hd student.dat
 	@echo "test #23 - 검색 테스트"
 	@-$(TARGET) -s "2014"
 	@-$(TARGET) -s "2015"

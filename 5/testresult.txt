@@ -1,0 +1,102 @@
+test #1 - 데이터 한 개 추가
+#@-hd student.idx
+#@-hd student.dat
+---------------------------------------------------------------------------------------------------------------------
+test #2 - 데이터 한 개 삭제
+#@-hd student.idx
+#@-hd student.dat
+---------------------------------------------------------------------------------------------------------------------
+test #3 - 좀 더 짧은 데이터 추가
+#@-hd student.idx
+#@-hd student.dat
+test #4 - 검색
+20142303|shk.im|Computer Science|3|hongcheon, Gangwon-do|010-xxxx-yyyy|niceb5y@gmail.com
+test #5 - 데이터 3 개 추가
+#@-hd student.idx
+#@-hd student.dat
+test #6 - 검색
+20142303|shk.im|Computer Science|3|hongcheon, Gangwon-do|010-xxxx-yyyy|niceb5y@gmail.com
+20150001|Shinyoung-Tae|computer law|9|heaven|010-1111-zzzz|god@tae.com
+20150002|Nisio-isin|Author|0|hell|017-1199-2288|ishin@japan.jp
+20150003|honobu-yonezawa|bing-gwa|5|yo-japan|817-1111-zzxx|yonezawa@honobu.com
+test #7 - 중간 2개 삭제
+#@-hd student.idx
+#@-hd student.dat
+#@-hd student.idx
+#@-hd student.dat
+test #7 - 검색
+20142303|shk.im|Computer Science|3|hongcheon, Gangwon-do|010-xxxx-yyyy|niceb5y@gmail.com
+20150003|honobu-yonezawa|bing-gwa|5|yo-japan|817-1111-zzxx|yonezawa@honobu.com
+test #8 - 삽입(삭제된 위치 재활용)
+./a.out -a "20150004" "newface" "new" "0" "hav" "010-123" "short@email" # 삽입했는데 헤더가 -1이 되는 버그가 있음 삽입하면 헤더가 기존에 이 포지션을 가져야함
+#@-hd student.idx
+#@-hd student.dat
+./a.out -a "20150005" "newface2" "new2" "2" "haz" "110-123" "short@em" 
+#@-hd student.idx
+#@-hd student.dat
+test #9 - 검색
+20142303|shk.im|Computer Science|3|hongcheon, Gangwon-do|010-xxxx-yyyy|niceb5y@gmail.com
+20150003|honobu-yonezawa|bing-gwa|5|yo-japan|817-1111-zzxx|yonezawa@honobu.com
+20150004|newface|new|0|hav|010-123|short@email
+20150005|newface2|new2|2|haz|110-123|short@em
+test #10 - 삭제
+#@-hd student.idx
+#@-hd student.dat
+test #11 - 4개의 작은 데이터 할당 (재사용성 테스트)
+./a.out -a "1" "2" "3" "4" "5" "6" "7" 
+./a.out -a "2" "2" "3" "4" "5" "6" "7" 
+./a.out -a "3" "2" "3" "4" "5" "6" "7" 
+./a.out -a "4" "2" "3" "4" "5" "6" "7" 
+#@-hd student.idx
+#@-hd student.dat
+test #12 - 검색
+1|2|3|4|5|6|7
+2|2|3|4|5|6|7
+3|2|3|4|5|6|7
+4|2|3|4|5|6|7
+test #13 - 삭제
+test #14 - 4개의 좀 더 큰 데이터 할당 (재사용성 테스트)
+./a.out -a "1" "20" "30" "4" "50" "60" "70" 
+./a.out -a "2" "20" "30" "4" "50" "60" "70" 
+./a.out -a "3" "20" "30" "4" "50" "60" "70" 
+./a.out -a "4" "20" "30" "4" "50" "60" "70" 
+#@-hd student.idx
+#@-hd student.dat
+test #15 - 검색
+1|20|30|4|50|60|70
+2|20|30|4|50|60|70
+3|20|30|4|50|60|70
+4|20|30|4|50|60|70
+test #16 - 삭제
+#@-hd student.idx
+#@-hd student.dat
+test #18 - 검색 시도 (안나옴)
+test #19 - 재생성
+하나
+둘
+셋
+넷
+다섯
+여섯
+#@-hd student.idx
+#@-hd student.dat
+test #20 - 임의의 순서대로 삭제
+test #21 - 남은 데이터 없음
+#@-hd student.idx
+#@-hd student.dat
+test #22 - 삭제 공간 재활용성 테스트 (적절한 데이터 기록)
+하나
+둘
+셋
+넷
+다섯
+여섯
+#@-hd student.idx
+#@-hd student.dat
+test #23 - 검색 테스트
+2014|paradise|law|1|aaddr |010-a-b|a@
+2015|apple|smart|2|baddr|010-c-d|b@
+2016|banana|hang|3|caddr|010-e-f|c@
+2017|carrot|manage|4|daddr|010-g-h|d@
+2018|diamond|sound|5|eaddr|010-i-j|e@
+2019|elephant|hyunghak|6|faddr|010-k-l|f@
