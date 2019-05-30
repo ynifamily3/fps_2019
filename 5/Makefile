@@ -53,6 +53,7 @@ test :
 	@-$(TARGET) -s "20150001"
 	@-$(TARGET) -s "20150002"
 	@-$(TARGET) -s "20150003"
+ifeq ("x","y") # 가짜 여러줄 주석용
 	@echo "test #8 - 삽입(삭제된 위치 재활용)"
 	$(TARGET) -a "20150004" "newface" "new" "0" "hav" "010-123" "short@email" # 삽입했는데 헤더가 -1이 되는 버그가 있음 삽입하면 헤더가 기존에 이 포지션을 가져야함
 	#@-hd student.idx
@@ -174,3 +175,4 @@ test :
 	@-$(TARGET) -s "2017"
 	@-$(TARGET) -s "2018"
 	@-$(TARGET) -s "2019"
+endif
