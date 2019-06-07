@@ -27,9 +27,11 @@ void readHashRec(FILE *fp, char *recordbuf, int rn)
 //
 void writeHashRec(FILE *fp, const char *recordbuf, int rn)
 {
+	static int ttl = 0;
 	fseek(fp, 4 + rn * HASH_RECORD_SIZE, SEEK_SET);
 	fwrite(recordbuf, SID_FIELD_SIZE, 1, fp);
-	fwrite(&rn, sizeof(rn), 1, fp);
+	fwrite(&ttl, sizeof(ttl), 1, fp);
+	ttl++;
 }
 
 //
@@ -62,7 +64,7 @@ void makeHashfile(int n)
 	setbuf(hash_fp, NULL);
 	fseek(hash_fp, 0, SEEK_SET);
 	fwrite(&header, sizeof(header), 1, hash_fp);
-	for (i = 0; i < STUDENT_RECORD_SIZE * n; i++) {
+	for (i = 0; i < HASH_RECORD_SIZE * n; i++) {
 		fwrite(&dummy, sizeof(char), 1, hash_fp);
 	}
 	fseek(record_fp, 0, SEEK_END);
