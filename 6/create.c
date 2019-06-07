@@ -34,7 +34,7 @@ int main(void)
     char random_letter = 'A' + (random() % 26);
     char *ptr = packbuf;
     srand(time(NULL));
-    fd = open(RECORD_FILE_NAME, O_CREAT | O_WRONLY | O_TRUNC);
+    fd = open(RECORD_FILE_NAME, O_CREAT | O_WRONLY | O_TRUNC, 0777);
     setbuf(stdout, NULL);
     printf("만들 개수 입력 : ");
     scanf("%d", &cnt);

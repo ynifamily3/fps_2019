@@ -107,6 +107,7 @@ int search(const char *sid, int *rn)
 			success = 1;
 			break;
 		}
+		if (tmpid_buf[0] == '\0') break; // 아예 NULL인 경우를 만나면 ...
 	}
 	if (!success) *rn = -1;
 	else *rn = (*rn + i) % hash_table_size;
